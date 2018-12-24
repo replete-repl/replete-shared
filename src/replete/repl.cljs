@@ -576,6 +576,12 @@
                                     :arglists (seq sigs)}]))
                      (into {})))))))))
 
+(defn ^:export all-vars []
+  (->> (all-ns)
+       (mapcat #(map first (get-in @st [::ana/namespaces % :defs])))
+       (map name)
+       into-array))
+
 (defn- find-doc*
   [re-string-or-pattern]
   (print
