@@ -195,6 +195,29 @@
   (load-core-analysis-cache eager 'cljs.core "cljs/core.cljs.cache.aot.")
   (load-core-analysis-cache eager 'cljs.core$macros "cljs/core$macros.cljc.cache."))
 
+(defn- read-transit
+  [json-file]
+  (transit-json->cljs (first (js/REPLETE_LOAD json-file))))
+
+(defn- load-analysis-cache
+  [ns-sym cache]
+  (cljs/load-analysis-cache! st ns-sym cache))
+
+(defn- read-and-load-analysis-cache
+  [ns-sym cache-json-file]
+  (load-analysis-cache ns-sym (read-transit cache-json-file)))
+
+(defn- side-load-ns
+  [ns-sym]
+  (when (nil? (get-in @st [::ana/namespaces ns-sym]))
+    (let [ns-sym-str          (name ns-sym)
+          analysis-cache-file (str (s/replace ns-sym-str "." "/") ".cljs.cache.json")]
+      (read-and-load-analysis-cache ns-sym analysis-cache-file)
+      (case ns-sym
+        replete.http (js/goog.require "replete.http")
+        replete.io (js/goog.require "replete.io"))
+      (swap! cljs.js/*loaded* conj ns-sym))))
+
 (defn ns-form? [form]
   (and (seq? form) (= 'ns (first form))))
 
