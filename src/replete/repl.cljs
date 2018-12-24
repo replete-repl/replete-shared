@@ -197,7 +197,7 @@
 
 (defn- read-transit
   [json-file]
-  (transit-json->cljs (first (js/REPLETE_LOAD json-file))))
+  (transit-json->cljs (js/REPLETE_LOAD json-file))))
 
 (defn- load-analysis-cache
   [ns-sym cache]
