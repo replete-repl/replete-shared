@@ -24,14 +24,6 @@
 #_(s/fdef replete.core$macros/with-open
           :args (s/cat :bindings ::bindings :body (s/* any?)))
 
-(defn exit
-  "Causes Replete to terminate with the supplied exit-value."
-  [exit-value]
-  (js/REPLETE_EXIT_WITH_VALUE exit-value))
-
-(s/fdef exit
-        :args (s/cat :exit-value integer?))
-
 (defprotocol IClosable
   "Protocol for closing entities."
   (-close [this] "Closes this entity."))
@@ -182,13 +174,6 @@
   *err*
   (make-closeable-raw-writer js/REPLETE_RAW_WRITE_STDERR js/REPLETE_RAW_FLUSH_STDERR))
 
-(defonce
-  ^{:doc "A sequence of the supplied command line arguments, or nil if
-  none were supplied"
-    :dynamic true}
-  *command-line-args*
-  (-> js/REPLETE_INITIAL_COMMAND_LINE_ARGS js->clj seq))
-
 (defn read-line
   "Reads the next line from the current value of *in*"
   []
@@ -270,17 +255,6 @@
 (s/fdef line-seq
         :args (s/cat :rdr #(instance? IBufferedReader %))
         :ret seq?)
-
-(defn read-password
-  "Reads the next line from console with echoing disabled. It will print out a
-  prompt if supplied"
-  ([] (read-password ""))
-  ([prompt]
-   (js/REPLETE_READ_PASSWORD prompt)))
-
-(s/fdef read-password
-        :args (s/cat :prompt (s/? string?))
-        :ret string?)
 
 (defonce
   ^{:dynamic true
