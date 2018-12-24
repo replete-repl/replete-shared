@@ -1,6 +1,7 @@
 (ns replete.core
   (:refer-clojure :exclude [resolve eval])
-  (:require [replete.repl :as repl]))
+  (:require [replete.repl :as repl]
+            [replete.http :as http]))
 
 (defn eval
   "Evaluates the form data structure (not text!) and returns the result."
@@ -28,3 +29,6 @@
    (#'repl/intern ns name))
   ([ns name val]
    (#'repl/intern ns name val)))
+
+(defn slurp [f]
+  (http/get f))
