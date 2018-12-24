@@ -24,10 +24,6 @@
 #_(s/fdef replete.core$macros/with-open
           :args (s/cat :bindings ::bindings :body (s/* any?)))
 
-(def ^:dynamic *replete-version*
-  "A string containing the version of the Replete executable."
-  js/REPLETE_VERSION)
-
 (defn exit
   "Causes Replete to terminate with the supplied exit-value."
   [exit-value]
