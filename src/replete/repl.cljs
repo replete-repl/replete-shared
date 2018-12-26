@@ -111,6 +111,12 @@
   []
   (keys (::ana/namespaces @st)))
 
+(defn ^:export all-vars []
+  (->> (all-ns)
+       (mapcat #(map first (get-in @st [::ana/namespaces % :defs])))
+       (map name)
+       into-array))
+
 (defn- drop-macros-suffix
   [ns-name]
   (if (s/ends-with? ns-name "$macros")
