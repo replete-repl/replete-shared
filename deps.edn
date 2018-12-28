@@ -1,6 +1,6 @@
 {:deps {andare {:mvn/version "0.9.0"}
         chivorcam {:mvn/version "1.0.0"}
-        cljsjs/parinfer {:mvn/version "1.8.1-0"}
+        cljsjs/parinfer {:mvn/version "3.11.0-0"}
         com.cognitect/transit-cljs {:mvn/version "0.8.248"}
         fipp {:mvn/version "0.6.8"}
         tailrecursion/cljson {:mvn/version "1.0.7"}
