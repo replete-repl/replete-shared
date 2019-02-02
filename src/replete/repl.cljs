@@ -379,12 +379,6 @@
            "(" file (when line (str ":" line))
            (when column (str ":" column)) ")"))))))
 
-(defn- is-reader-or-analysis?
-  "Indicates if an exception is a reader or analysis exception."
-  [e]
-  (and (instance? ExceptionInfo e)
-       (some #{[:type :reader-exception] [:tag :cljs/analysis-error]} (ex-data e))))
-
 (defonce ^:private can-show-indicator (atom false))
 
 (defn- reset-show-indicator!
@@ -401,36 +395,17 @@
   [column]
   (str (apply str (take (dec column) (repeat " "))) "^"))
 
-(defn- get-error-column-indicator
-  [error]
-  (when (and (instance? ExceptionInfo error)
-             (= could-not-eval-expr (ex-message error)))
-    (when-let [cause (ex-cause error)]
-      (when (is-reader-or-analysis? cause)
-        (when-let [column (:column (ex-data cause))]
-          (form-indicator column))))))
-
-(defn- get-error-column-indicator-guarded
-  [error]
-  (let [indicator (get-error-column-indicator error)]
-    (when (and indicator
-               (show-indicator?))
-      indicator)))
-
 (defn print-error
   ([error]
    (print-error error false))
   ([error include-stacktrace?]
-   (let [e (or (.-cause error) error)]
-     (println
-       (str
-         (if (is-reader-or-analysis? e)
-           "\u001b[35m"
-           "\u001b[31m")
-         (get-error-column-indicator-guarded error)
-         (.-message e)
-         (when include-stacktrace?
-           (str "\n" (.-stack e))))))))
+   (if include-stacktrace?
+     (let [error (or (.-cause error) error)]
+       (print (str (.-message error) \newline (.-stack error))))
+     (let [error (cond-> error
+                   (-> (ex-data (ex-cause error)) (contains? :clojure.error/phase))
+                   ex-cause)]
+       (print (repl/error->str error))))))
 
 (defn- get-macro-var
   [env sym macros-ns]
