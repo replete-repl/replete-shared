@@ -5,5 +5,5 @@
         fipp {:mvn/version "0.6.8"}
         tailrecursion/cljson {:mvn/version "1.0.7"}
         malabarba/lazy-map {:mvn/version "1.3"}
-        org.clojure/clojurescript {:mvn/version "1.10.439"}
+        org.clojure/clojurescript {:mvn/version "1.10.516"}
         org.clojure/test.check {:mvn/version "0.10.0-alpha3"}}}
