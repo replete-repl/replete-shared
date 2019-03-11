@@ -66,7 +66,10 @@
   (= "iPad" (:user-interface-idiom @app-env)))
 
 (defn repl-read-string [line]
-  (r/read-string {:read-cond :allow :features #{:cljs}} line))
+  (try
+    (r/read-string {:read-cond :allow :features #{:cljs}} line)
+    (catch :default e
+      (throw (ex-info nil {:clojure.error/phase :read-source} e)))))
 
 (def ^:private expression-name "Expression")
 (def ^:private could-not-eval-expr (str "Could not eval " expression-name))
