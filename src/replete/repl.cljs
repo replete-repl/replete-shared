@@ -669,7 +669,7 @@
 (defn- string-source
   [sym]
   (or (fetch-source (get-var (get-aenv) sym))
-    "Source not found"))
+      "Source not found"))
 
 (defn- source*
   [sym]
