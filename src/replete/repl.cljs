@@ -21,7 +21,8 @@
             [lazy-map.core :refer-macros [lazy-map]]
             [replete.pprint :as pprint]
             [replete.repl-resources :refer [special-doc-map repl-special-doc-map]]
-            [cljs.compiler :as comp]))
+            [cljs.compiler :as comp]
+            [clojure.string :as string]))
 
 ;; Prefer ES6 Number.isInteger
 (set! integer? (or (.-isInteger js/Number) integer?))
@@ -435,7 +436,7 @@
 (defn- get-var
   [env sym]
   (let [var (or (with-compiler-env st (resolve-var env sym))
-              (some #(get-macro-var env sym %) (all-macros-ns)))]
+                (some #(get-macro-var env sym %) (all-macros-ns)))]
     (when var
       (if (= (namespace (:name var)) (str (:ns var)))
         (update var :name #(symbol (name %)))
@@ -458,13 +459,13 @@
 (defn- fetch-source
   [var]
   (or (::repl-entered-source var)
-    (when-let [filepath (or (:file var) (:file (:meta var)))]
-      (when-let [file-source (get-file-source filepath)]
-        (let [rdr (rt/source-logging-push-back-reader file-source)]
-          (dotimes [_ (dec (:line var))] (rt/read-line rdr))
-          (binding [r/*alias-map* (reify ILookup (-lookup [_ k] k))]
-            (-> (r/read {:read-cond :allow :features #{:cljs}} rdr)
-              meta :source)))))))
+      (when-let [filepath (or (:file var) (:file (:meta var)))]
+        (when-let [file-source (get-file-source filepath)]
+          (let [rdr (rt/source-logging-push-back-reader file-source)]
+            (dotimes [_ (dec (:line var))] (rt/read-line rdr))
+            (binding [r/*alias-map* (reify ILookup (-lookup [_ k] k))]
+              (-> (r/read {:read-cond :allow :features #{:cljs}} rdr)
+                  meta :source)))))))
 
 (defn- make-base-eval-opts
   []
@@ -536,8 +537,8 @@
   is a namespace alias."
   [ns-sym]
   (or (get-in @st [::ana/namespaces ana/*cljs-ns* :requires ns-sym])
-    (get-in @st [::ana/namespaces ana/*cljs-ns* :require-macros ns-sym])
-    ns-sym))
+      (get-in @st [::ana/namespaces ana/*cljs-ns* :require-macros ns-sym])
+      ns-sym))
 
 ;; More testing after js/REPLETE_LOAD
 (defn- string-dir
@@ -640,12 +641,12 @@
                              (map (juxt first (comp :doc second))
                                (get-in @st [::ana/namespaces ns :defs])))
                      (all-ns)))]
-    (apply str (for [[sym doc] sym-docs
-                     :when (and doc
-                             (name sym)
-                             (or (re-find re doc)
-                               (re-find re (name sym))))]
-                 (doc* sym string-doc)))))
+    (string/join (for [[sym doc] sym-docs
+                       :when (and doc
+                                  (name sym)
+                                  (or (re-find re doc)
+                                      (re-find re (name sym))))]
+                   (doc* sym string-doc)))))
 
 (defn- find-doc*
   [re-string-or-pattern]
@@ -659,9 +660,9 @@
                          (all-ns)))]
         (doseq [[sym doc] sym-docs
                 :when (and doc
-                        (name sym)
-                        (or (re-find re doc)
-                          (re-find re (name sym))))]
+                           (name sym)
+                           (or (re-find re doc)
+                               (re-find re (name sym))))]
           (doc* sym))))))
 
 ;; Start testing after js/REPLETE_LOAD
