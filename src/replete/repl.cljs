@@ -398,17 +398,23 @@
   [column]
   (str (apply str (take (dec column) (repeat " "))) "^"))
 
+(defn string-error
+  ([error]
+   (string-error error false))
+  ([error include-stacktrace?]
+   (if include-stacktrace?
+     (let [error (or (.-cause error) error)]
+       (str (.-message error) \newline (.-stack error)))
+     (let [error (cond-> error
+                   (-> (ex-data (ex-cause error)) (contains? :clojure.error/phase))
+                   ex-cause)]
+       (repl/error->str error)))))
+
 (defn print-error
   ([error]
    (print-error error false))
   ([error include-stacktrace?]
-   (if include-stacktrace?
-     (let [error (or (.-cause error) error)]
-       (print (str (.-message error) \newline (.-stack error))))
-     (let [error (cond-> error
-                   (-> (ex-data (ex-cause error)) (contains? :clojure.error/phase))
-                   ex-cause)]
-       (print (repl/error->str error))))))
+   (println (string-error error include-stacktrace?))))
 
 (defn- get-macro-var
   [env sym macros-ns]
@@ -424,12 +430,12 @@
 (defn- all-macros-ns
   []
   (->> (all-ns)
-    (filter #(s/ends-with? (str %) "$macros"))))
+       (filter #(s/ends-with? (str %) "$macros"))))
 
 (defn- get-var
   [env sym]
   (let [var (or (with-compiler-env st (resolve-var env sym))
-                (some #(get-macro-var env sym %) (all-macros-ns)))]
+              (some #(get-macro-var env sym %) (all-macros-ns)))]
     (when var
       (if (= (namespace (:name var)) (str (:ns var)))
         (update var :name #(symbol (name %)))
@@ -441,10 +447,9 @@
     (let [without-extension (s/replace
                               (s/replace (name filepath) #"\." "/")
                               #"-" "_")]
-      (or
-        (js/REPLETE_LOAD (str without-extension ".clj"))
-        (js/REPLETE_LOAD (str without-extension ".cljc"))
-        (js/REPLETE_LOAD (str without-extension ".cljs"))))
+      (or (js/REPLETE_LOAD (str without-extension ".clj"))
+          (js/REPLETE_LOAD (str without-extension ".cljc"))
+          (js/REPLETE_LOAD (str without-extension ".cljs"))))
     (let [file-source (js/REPLETE_LOAD filepath)]
       (or file-source
           (js/REPLETE_LOAD (s/replace filepath #"^out/" ""))
@@ -453,13 +458,13 @@
 (defn- fetch-source
   [var]
   (or (::repl-entered-source var)
-      (when-let [filepath (or (:file var) (:file (:meta var)))]
-        (when-let [file-source (get-file-source filepath)]
-          (let [rdr (rt/source-logging-push-back-reader file-source)]
-            (dotimes [_ (dec (:line var))] (rt/read-line rdr))
-            (binding [r/*alias-map* (reify ILookup (-lookup [_ k] k))]
-              (-> (r/read {:read-cond :allow :features #{:cljs}} rdr)
-                meta :source)))))))
+    (when-let [filepath (or (:file var) (:file (:meta var)))]
+      (when-let [file-source (get-file-source filepath)]
+        (let [rdr (rt/source-logging-push-back-reader file-source)]
+          (dotimes [_ (dec (:line var))] (rt/read-line rdr))
+          (binding [r/*alias-map* (reify ILookup (-lookup [_ k] k))]
+            (-> (r/read {:read-cond :allow :features #{:cljs}} rdr)
+              meta :source)))))))
 
 (defn- make-base-eval-opts
   []
@@ -467,6 +472,41 @@
    :context :expr
    :eval    cljs/js-eval})
 
+;; Sync version
+(defn- prepl-process-in-ns
+  [argument]
+  (let [result-data (atom {})]
+    (cljs/eval
+      st
+      argument
+      (make-base-eval-opts)
+      (fn [result]
+        (if (:error result)
+          (reset! result-data {:tag :err
+                               :val (:error result)})
+          (let [ns-name (:value result)]
+            (if-not (symbol? ns-name)
+              (reset! result-data {:tag :err
+                                   :val "Argument to in-ns must be a symbol."})
+              (if (some (partial = ns-name) (known-namespaces))
+                (do (reset! current-ns ns-name)
+                    (reset! result-data {:tag :ret
+                                         :val ns-name}))
+                (let [ns-form `(~'ns ~ns-name)]
+                  (cljs/eval
+                    st
+                    ns-form
+                    (make-base-eval-opts)
+                    (fn [{e :error}]
+                      (if e
+                        (reset! result-data {:tag :err
+                                             :val e})
+                        (do (reset! current-ns ns-name)
+                            (reset! result-data {:tag :ret
+                                                 :val ns-name}))))))))))))
+    (merge @result-data {:ns @current-ns})))
+
+;; refactor to call the above...
 (defn- process-in-ns
   [argument]
   (cljs/eval
@@ -496,18 +536,22 @@
   is a namespace alias."
   [ns-sym]
   (or (get-in @st [::ana/namespaces ana/*cljs-ns* :requires ns-sym])
-      (get-in @st [::ana/namespaces ana/*cljs-ns* :require-macros ns-sym])
-      ns-sym))
+    (get-in @st [::ana/namespaces ana/*cljs-ns* :require-macros ns-sym])
+    ns-sym))
+
+;; More testing after js/REPLETE_LOAD
+(defn- string-dir
+  ([nsname]
+   (let [ns (resolve-ns nsname)]
+     (with-out-str
+       (run! prn
+         (distinct (sort (concat
+                           (public-syms ns)
+                           (public-syms (add-macros-suffix ns))))))))))
 
 (defn- dir*
   [nsname]
-  (let [ns (resolve-ns nsname)]
-    (print
-      (with-out-str
-        (run! prn
-          (distinct (sort (concat
-                            (public-syms ns)
-                            (public-syms (add-macros-suffix ns))))))))))
+  (print (string-dir nsname)))
 
 (defn- apropos*
   [str-or-pattern]
@@ -523,13 +567,16 @@
                                   (filter matches? (public-syms ns)))))
                       (all-ns))))))
 
+(defn- string-doc
+  [m]
+  (with-out-str
+    (repl/print-doc (update m :doc (if (user-interface-idiom-ipad?)
+                                     identity
+                                     reflow)))))
+
 (defn- print-doc
   [m]
-  (print
-    (with-out-str
-      (repl/print-doc (update m :doc (if (user-interface-idiom-ipad?)
-                                       identity
-                                       reflow))))))
+  (print (string-doc m)))
 
 (defn- undo-reader-conditional-whitespace-docstring
   "Undoes the effect that wrapping a reader conditional around
@@ -546,42 +593,59 @@
       s)))
 
 (defn- doc*
-  [sym]
-  (if-let [special-sym ('{&       fn
-                          catch   try
-                          finally try} sym)]
-    (doc* special-sym)
-    (cond
+  ([sym]
+   (doc* sym print-doc))
+  ([sym print-doc-fn]
+   (if-let [special-sym ('{&       fn
+                           catch   try
+                           finally try} sym)]
+     (doc* special-sym print-doc-fn)
+     (cond
 
-      (special-doc-map sym)
-      (print-doc (special-doc sym))
+       (special-doc-map sym)
+       (print-doc-fn (special-doc sym))
 
-      (repl-special-doc-map sym)
-      (print-doc (repl-special-doc sym))
+       (repl-special-doc-map sym)
+       (print-doc-fn (repl-special-doc sym))
 
-      (get-namespace sym)
-      (print-doc
-        (select-keys (get-namespace sym) [:name :doc]))
+       (get-namespace sym)
+       (print-doc-fn
+         (select-keys (get-namespace sym) [:name :doc]))
 
-      (get-var (get-aenv) sym)
-      (print-doc
-        (let [var (get-var (get-aenv) sym)
-              var (assoc var :forms (-> var :meta :forms second)
-                             :arglists (-> var :meta :arglists second))
-              m   (select-keys var
-                    [:ns :name :doc :forms :arglists :macro :url])
-              m   (update m :doc undo-reader-conditional-whitespace-docstring)]
-          (cond-> (update-in m [:name] name)
-            (:protocol-symbol var)
-            (assoc :protocol true
-                   :methods
-                   (->> (get-in var [:protocol-info :methods])
-                     (map (fn [[fname sigs]]
-                            [fname {:doc      (:doc
-                                                (get-var (get-aenv)
-                                                  (symbol (str (:ns var)) (str fname))))
-                                    :arglists (seq sigs)}]))
-                     (into {})))))))))
+       (get-var (get-aenv) sym)
+       (print-doc-fn
+         (let [var (get-var (get-aenv) sym)
+               var (assoc var :forms (-> var :meta :forms second)
+                              :arglists (-> var :meta :arglists second))
+               m   (select-keys var
+                     [:ns :name :doc :forms :arglists :macro :url])
+               m   (update m :doc undo-reader-conditional-whitespace-docstring)]
+           (cond-> (update-in m [:name] name)
+             (:protocol-symbol var)
+             (assoc :protocol true
+                    :methods
+                    (->> (get-in var [:protocol-info :methods])
+                      (map (fn [[fname sigs]]
+                             [fname {:doc      (:doc
+                                                 (get-var (get-aenv)
+                                                   (symbol (str (:ns var)) (str fname))))
+                                     :arglists (seq sigs)}]))
+                      (into {}))))))))))
+
+(defn- string-find-doc*
+  [re-string-or-pattern]
+  (let [re       (re-pattern re-string-or-pattern)
+        sym-docs (sort-by first
+                   (mapcat (fn [ns]
+                             (map (juxt first (comp :doc second))
+                               (get-in @st [::ana/namespaces ns :defs])))
+                     (all-ns)))]
+    (apply str (for [[sym doc] sym-docs
+                     :when (and doc
+                             (name sym)
+                             (or (re-find re doc)
+                               (re-find re (name sym))))]
+                 (doc* sym string-doc)))))
 
 (defn- find-doc*
   [re-string-or-pattern]
@@ -595,15 +659,34 @@
                          (all-ns)))]
         (doseq [[sym doc] sym-docs
                 :when (and doc
-                           (name sym)
-                           (or (re-find re doc)
-                               (re-find re (name sym))))]
+                        (name sym)
+                        (or (re-find re doc)
+                          (re-find re (name sym))))]
           (doc* sym))))))
+
+;; Start testing after js/REPLETE_LOAD
+(defn- string-source
+  [sym]
+  (or (fetch-source (get-var (get-aenv) sym))
+    "Source not found"))
 
 (defn- source*
   [sym]
-  (println (or (fetch-source (get-var (get-aenv) sym))
-               "Source not found")))
+  (println (string-source sym)))
+
+(defn- string-pst*
+  ([]
+   (string-pst* '*e))
+  ([expr]
+   (try (cljs/eval st
+          expr
+          (make-base-eval-opts)
+          (fn [{:keys [value]}]
+            (when value
+              {:tag :err
+               :val (string-error value true)})))
+        (catch js/Error e {:tag :err
+                           :val (str :caught e)}))))
 
 (defn- pst*
   ([]
@@ -718,6 +801,72 @@
                  (print-error error))))))
        (catch :default e
          (print-error e))))))
+
+;; Prepl also now gives :clojure.error/phase iff :err tag
+(defn ^:export read-eval
+  ([source]
+   (read-eval source true))
+  ([source expression?]
+   (let [result {:tag :ret :form source :ns @current-ns}]
+     (binding [ana/*cljs-warning-handlers* (if expression?
+                                             [warning-handler]
+                                             [ana/default-warning-handler])
+               ana/*cljs-ns*               @current-ns
+               env/*compiler*              st
+               *ns*                        (create-ns @current-ns)
+               r/*data-readers*            tags/*cljs-data-readers*
+               r/resolve-symbol            ana/resolve-symbol
+               r/*alias-map*               (current-alias-map)]
+       (try
+         (let [expression-form (and expression? (repl-read-string source))]
+           (if (repl-special? expression-form)
+             (let [special-form (first expression-form)
+                   argument     (second expression-form)]
+               (case special-form
+                 in-ns (merge result (prepl-process-in-ns argument))
+                 dir (merge result {:val (string-dir argument)})
+                 apropos (let [value (apropos* argument)]
+                           (process-1-2-3 expression-form value)
+                           (merge result {:val value}))
+                 doc (merge result {:val (doc* argument string-doc)})
+                 find-doc (merge result {:val (string-find-doc* argument)})
+                 source (merge result {:val (string-source argument)})
+                 pst (merge result (if argument
+                                     (string-pst* argument)
+                                     (string-pst*)))))
+             (let [eval-result (atom result)]
+               (cljs/eval-str
+                 st
+                 source
+                 (if expression? source "File")             ;; Later
+                 (merge
+                   {:ns         @current-ns
+                    :load       load
+                    :eval       cljs/js-eval
+                    :source-map false
+                    :verbose    (:verbose @app-env)}
+                   (when (:checked-arrays @app-env)
+                     {:checked-arrays (:checked-arrays @app-env)})
+                   (when expression?
+                     {:context       :expr
+                      :def-emits-var true}))
+                 (fn [{:keys [ns value error]}]
+                   (if expression?
+                     (when-not error
+                       (process-1-2-3 expression-form value)
+                       (when (def-form? expression-form)
+                         (let [{:keys [ns name]} (meta value)]
+                           (swap! st assoc-in [::ana/namespaces ns
+                                               :defs name
+                                               ::repl-entered-source] source)))
+                       (reset! current-ns ns)
+                       (reset! eval-result (merge result {:val value}))))
+                   (when error
+                     (set! *e error)
+                     (reset! eval-result (merge result {:tag :err :val error})))))
+               @eval-result)))
+         (catch :default e
+           (merge result {:tag :err :val e})))))))
 
 (defn- eval
   ([form]
