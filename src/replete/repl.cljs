@@ -302,12 +302,9 @@
     (= name 'cljs.env)
     (= name 'replete.repl)
     (and (= name 'cljs.env.macros) macros)
-    (and (= name 'cljs.analyzer.macros) macros)
     (and (= name 'cljs.compiler.macros) macros)
     (and (= name 'cljs.repl) macros)
-    (and (= name 'cljs.tools.reader.reader-types) macros)
     (and (= name 'cljs.js) macros)
-    (and (= name 'cljs.pprint) macros)
     (and (= name 'cljs.reader) macros)
     (and (= name 'clojure.template) macros)
     (and (= name 'tailrecursion.cljson) macros)
@@ -323,15 +320,19 @@
 
 (defn- do-load-goog
   [name cb]
+  (println :load-goog :name name)
   (if (skip-load-goog-js? name)
     (cb {:lang   :js
          :source ""})
-    (if-let [goog-path (get (closure-index-mem) name)]
-      (when-not (load-and-callback! name goog-path ".js" false cb)
-        (cb nil))
-      (cb nil))))
+    (let [goog-path (get (closure-index-mem) name)]
+      (println :load-goog :goog-path goog-path)
+      (if goog-path
+        (when-not (load-and-callback! name goog-path ".js" false cb)
+          (cb nil))
+        (cb nil)))))
 
 (defn load [{:keys [name macros path] :as full} cb]
+  (println :repl-load :name name :macros macros :path path)
   (cond
     (skip-load? full) (cb {:lang   :js
                            :source ""})
@@ -444,7 +445,7 @@
 
 (defn- get-file-source
   [filepath]
-  (if (symbol? filepath)
+  (if (symbol? filepath)                                    ;; do we need both paths??
     (let [without-extension (s/replace
                               (s/replace (name filepath) #"\." "/")
                               #"-" "_")]

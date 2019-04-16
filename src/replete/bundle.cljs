@@ -23,6 +23,7 @@
     goog.Throttle
     goog.Timer
     goog.Uri
+    goog.array
     goog.color
     goog.color.Hsl
     goog.color.Hsv
