@@ -296,7 +296,6 @@
 
 (defn- skip-load?
   [{:keys [name macros]}]
-  (println :skip-load? :name name :macros macros)
   (or (= name 'cljsjs.parinfer)
       (= name 'cljs.core)
       (= name 'cljs.env)
@@ -324,12 +323,10 @@
 
 (defn- do-load-goog
   [name cb]
-  (println :load-goog :name name)
   (if (skip-load-goog-js? name)
     (cb {:lang   :js
          :source ""})
     (let [goog-path (get (closure-index-mem) name)]
-      (println :load-goog :goog-path goog-path)
       (if goog-path
         (when-not (load-and-callback! name goog-path ".js" false cb)
           (cb nil))
@@ -337,60 +334,55 @@
 
 (defn hack-macros
   [{:keys [name macros] :as full}]
-  (let [extensions (if macros
-                     [".clj" ".cljc"]
-                     [".cljs" ".cljc" ".js"])]
-    (cond
-      (= name 'cljs.tools.reader.reader-types)
-      (merge full {:extensions [".cljs" ".js"]})
-
-      (= name 'cljs.stacktrace)
-      (merge full {:extensions [".js" ".cljc"]})
-
-      (= name 'cljs.analyzer.macros)
-      (merge full {:extensions [".clj" ".cljc"]})
-
-      (or (= name 'cljs.tools.reader.reader-types)
-          (= name 'cljs.pprint)
-          (= name 'cljs.spec.alpha)
-          (= name 'cljs.spec.gen.alpha)
-          (= name 'cljs.spec.test.alpha)
-          (= name 'cljs.test))
-      (if macros
-        (merge full {:extensions [".cljc"]})
-        (merge full {:extensions [".cljs" ".cljc" ".js"]}))
-
-      (or (= name 'clojure.test.check)
-          (= name 'clojure.test.check.generators)
-          (= name 'clojure.test.check.properties)
-          (= name 'clojure.test.check.clojure-test)
-          (= name 'cljs.analyzer)
-          (= name 'cljs.analyzer.api)
-          (= name 'cljs.tagged-literals))
-      (merge full {:extensions [".cljc"]})
-
-      :else
-      (merge full {:extensions extensions}))))
-
-(defn load [{:keys [name macros path] :as full} cb]
-  (println :load :name name :macros macros :path path)
   (cond
-    (skip-load? full)
-    (do (println :skipping-load :name name)
-        (cb {:lang :js :source ""}))
+    (= name 'cljs.tools.reader.reader-types)
+    (merge full {:extensions [".cljs" ".js"]})
 
-    (re-matches #"^goog/.*" path)
-    (do (println :goog-load :path path)
-        (do-load-goog name cb))
+    (= name 'cljs.stacktrace)
+    (merge full {:extensions [".js" ".cljc"]})
+
+    (= name 'cljs.analyzer.macros)
+    (merge full {:extensions [".clj" ".cljc"]})
+
+    (or (= name 'cljs.tools.reader.reader-types)
+        (= name 'cljs.pprint)
+        (= name 'cljs.spec.alpha)
+        (= name 'cljs.spec.gen.alpha)
+        (= name 'cljs.spec.test.alpha)
+        (= name 'cljs.test))
+    (merge full {:extensions
+                 (if macros [".cljc"]
+                            [".cljs" ".cljc" ".js"])})
+
+    (or (= name 'clojure.test.check)
+        (= name 'clojure.test.check.generators)
+        (= name 'clojure.test.check.properties)
+        (= name 'clojure.test.check.clojure-test)
+        (= name 'cljs.analyzer)
+        (= name 'cljs.analyzer.api)
+        (= name 'cljs.tagged-literals))
+    (merge full {:extensions [".cljc"]})
 
     :else
-    (do (println :load-else-loop :name name)
-        (loop [{:keys [name macros path extensions]} (hack-macros full)]
-          (if extensions
-            (do (println :load-extensions :name name :path path :trying (first extensions))
-                (when-not (load-and-callback! name path (first extensions) macros cb)
-                  (recur (next extensions))))
-            (cb nil))))))
+    (merge full {:extensions
+                 (if macros
+                   [".clj" ".cljc"]
+                   [".cljs" ".cljc" ".js"])})))
+
+(defn load [{:keys [name macros path] :as full} cb]
+  (cond
+    (skip-load? full)
+    (cb {:lang :js :source ""})
+
+    (re-matches #"^goog/.*" path)
+    (do-load-goog name cb)
+
+    :else
+    (loop [{:keys [name macros path extensions]} (hack-macros full)]
+      (if extensions
+        (when-not (load-and-callback! name path (first extensions) macros cb)
+          (recur (next extensions)))
+        (cb nil)))))
 
 (declare make-base-eval-opts)
 (declare print-error)
@@ -588,7 +580,6 @@
       (get-in @st [::ana/namespaces ana/*cljs-ns* :require-macros ns-sym])
       ns-sym))
 
-;; More testing after js/REPLETE_LOAD
 (defn- string-dir
   ([nsname]
    (let [ns (resolve-ns nsname)]
