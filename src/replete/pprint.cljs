@@ -53,7 +53,20 @@
   [x]
   [:text (binding [*print-meta* false] (pr-str x))])
 
-(defrecord RepletePrinter [symbols print-meta print-length print-level print-namespace-maps theme]
+(defn- pr-abbrev-str [ns x]
+  (let [sym (symbol x)]
+    (str
+      (cond
+        (var? x) "#'"
+        (keyword? x) ":")
+      (when (namespace sym)
+        (if-not (= (str ns) (namespace sym))
+          (str (namespace sym) "/")
+          (when (keyword? x)
+            ":")))
+      (name sym))))
+
+(defrecord RepletePrinter [symbols print-meta print-length print-level print-namespace-maps theme ns]
 
   fipp.visit/IVisitor
 
@@ -102,7 +115,7 @@
     [:text (str x)])
 
   (visit-keyword [this x]
-    (wrap-theme :results-keyword-font theme (pr-str x)))
+    (wrap-theme :results-keyword-font theme (pr-abbrev-str ns x)))
 
   (visit-number [this x]
     (wrap-theme :results-font theme (pr-str x)))
@@ -116,9 +129,11 @@
     (pretty-coll this "[" x :line "]" visit))
 
   (visit-map [this x]
-    (let [[ns lift-map] (lift-ns print-namespace-maps x)
-          prefix (when (some? ns)
-                   (str "#:" ns))]
+    (let [[lift-ns lift-map] (lift-ns print-namespace-maps x)
+          prefix (when (some? lift-ns)
+                   (str "#:" (if (= lift-ns (str ns))
+                                   ":"
+                                   lift-ns)))]
       (pretty-coll this (str prefix "{") (or lift-map x) [:span "," :line] "}"
         (fn [printer [k v]]
           [:span (visit printer k) " " (visit printer v)]))))
@@ -140,7 +155,7 @@
       (visit* this x)))
 
   (visit-var [this x]
-    [:text (pr-str x)])
+    [:text (pr-abbrev-str ns x)])
 
   (visit-pattern [this x]
     [:text (pr-str x)])
