@@ -220,7 +220,8 @@
                  (if-not error
                    (do
                      (let [out-str (with-out-str (pprint/pprint value {:width (or (:width @app-env)
-                                                                                  35)}))
+                                                                                  35)
+                                                                       :ns    ns}))
                            out-str (subs out-str 0 (dec (count out-str)))]
                        (print out-str))
                      (priv/process-1-2-3 expression-form value)
