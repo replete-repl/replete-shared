@@ -583,6 +583,110 @@
   [expression-form]
   (call-form? expression-form '#{def defn defn- defonce defmulti}))
 
+(defn ^{:treat-as-private true}
+  string-doc
+  [m]
+  (with-out-str
+        (repl/print-doc (update m :doc (if (user-interface-idiom-ipad?)
+                                         identity
+                                         reflow)))))
+
+(defn- print-doc
+  [m]
+  (print (string-doc m)))
+
+(defn ^{:treat-as-private true}
+  doc*
+  ([sym]
+    (doc* sym print-doc))
+  ([sym print-doc-fn]
+   (if-let [special-sym ('{&       fn
+                           catch   try
+                           finally try} sym)]
+     (doc* special-sym)
+     (cond
+
+       (special-doc-map sym)
+       (print-doc-fn (special-doc sym))
+
+       (repl-special-doc-map sym)
+       (print-doc-fn (repl-special-doc sym))
+
+       (get-namespace sym)
+       (print-doc-fn
+         (select-keys (get-namespace sym) [:name :doc]))
+
+       (get-var (get-aenv) sym)
+       (print-doc-fn
+         (let [var (get-var (get-aenv) sym)
+               var (assoc var :forms (-> var :meta :forms second)
+                              :arglists (-> var :meta :arglists second))
+               m (select-keys var
+                              [:ns :name :doc :forms :arglists :macro :url])
+               m (update m :doc undo-reader-conditional-whitespace-docstring)]
+           (cond-> (update-in m [:name] name)
+                   (:protocol-symbol var)
+                   (assoc :protocol true
+                          :methods
+                          (->> (get-in var [:protocol-info :methods])
+                               (map (fn [[fname sigs]]
+                                      [fname {:doc      (:doc
+                                                          (get-var (get-aenv)
+                                                                   (symbol (str (:ns var)) (str fname))))
+                                              :arglists (seq sigs)}]))
+                               (into {}))))))))))
+
+(defn ^{:treat-as-private true}
+  string-dir
+  [nsname]
+  (let [ns (resolve-ns nsname)]
+    (with-out-str
+      (run! prn
+            (distinct (sort (concat
+                              (public-syms ns)
+                              (public-syms (add-macros-suffix ns)))))))))
+
+(defn ^{:treat-as-private true}
+  dir*
+  [nsname]
+  (print (string-dir nsname)))
+
+(defn ^{:treat-as-private true}
+  string-find-doc
+  [re-string-or-pattern]
+  (with-out-str
+    (let [re (re-pattern re-string-or-pattern)
+          sym-docs (sort-by first
+                            (mapcat (fn [ns]
+                                      (map (juxt first (comp :doc second))
+                                           (get-in @st [::ana/namespaces ns :defs])))
+                                    (all-ns)))]
+      (doseq [[sym doc] sym-docs
+              :when (and doc
+                         (name sym)
+                         (or (re-find re doc)
+                             (re-find re (name sym))))]
+        (doc* sym)))))
+
+(defn ^{:treat-as-private true}
+  find-doc*
+  [re-string-or-pattern]
+  (print (string-find-doc re-string-or-pattern)))
+
+(defn ^{:treat-as-private true}
+  string-source
+  [sym]
+  (or (fetch-source (get-var (get-aenv) sym))
+      "Source not found"))
+
+(defn ^{:treat-as-private true}
+  source*
+  [sym]
+  (println (string-source sym)))
+
+
+;; Are the functions below ever used?
+;; I smell dead code...
 (defn- eval
   ([form]
    (eval form @current-ns))

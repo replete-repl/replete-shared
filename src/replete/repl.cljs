@@ -28,7 +28,6 @@
 (def ^:retain-public-interfaces first-non-space-pos-after priv/first-non-space-pos-after)
 (def ^:retain-public-interfaces load-core-analysis-caches priv/load-core-analysis-caches)
 (def ^:retain-public-interfaces ns-form? priv/ns-form?)
-(def ^:retain-public-interfaces reflow priv/reflow)
 (def ^:retain-public-interfaces extension->lang priv/extension->lang)
 (def ^:retain-public-interfaces load-and-callback! priv/load-and-callback!)
 (def ^:retain-public-interfaces do-load-goog priv/do-load-goog)
@@ -77,84 +76,6 @@
 (defn ^:export chivorcam-referred []
   (boolean (get-in @st [::ana/namespaces @priv/current-ns :use-macros 'defmacfn])))
 
-(defn- dir*
-  [nsname]
-  (let [ns (priv/resolve-ns nsname)]
-    (print
-      (with-out-str
-        (run! prn
-              (distinct (sort (concat
-                                (priv/public-syms ns)
-                                (priv/public-syms (priv/add-macros-suffix ns))))))))))
-
-(defn- print-doc
-  [m]
-  (print
-    (with-out-str
-      (repl/print-doc (update m :doc (if (user-interface-idiom-ipad?)
-                                       identity
-                                       reflow))))))
-
-(defn- doc*
-  [sym]
-  (if-let [special-sym ('{&       fn
-                          catch   try
-                          finally try} sym)]
-    (doc* special-sym)
-    (cond
-
-      (special-doc-map sym)
-      (print-doc (priv/special-doc sym))
-
-      (repl-special-doc-map sym)
-      (print-doc (priv/repl-special-doc sym))
-
-      (priv/get-namespace sym)
-      (print-doc
-        (select-keys (priv/get-namespace sym) [:name :doc]))
-
-      (priv/get-var (priv/get-aenv) sym)
-      (print-doc
-        (let [var (priv/get-var (priv/get-aenv) sym)
-              var (assoc var :forms (-> var :meta :forms second)
-                             :arglists (-> var :meta :arglists second))
-              m   (select-keys var
-                               [:ns :name :doc :forms :arglists :macro :url])
-              m   (update m :doc priv/undo-reader-conditional-whitespace-docstring)]
-          (cond-> (update-in m [:name] name)
-                  (:protocol-symbol var)
-                  (assoc :protocol true
-                         :methods
-                         (->> (get-in var [:protocol-info :methods])
-                              (map (fn [[fname sigs]]
-                                     [fname {:doc      (:doc
-                                                         (priv/get-var (priv/get-aenv)
-                                                                  (symbol (str (:ns var)) (str fname))))
-                                             :arglists (seq sigs)}]))
-                              (into {})))))))))
-
-(defn- find-doc*
-  [re-string-or-pattern]
-  (print
-    (with-out-str
-      (let [re       (re-pattern re-string-or-pattern)
-            sym-docs (sort-by first
-                              (mapcat (fn [ns]
-                                        (map (juxt first (comp :doc second))
-                                             (get-in @st [::ana/namespaces ns :defs])))
-                                      (priv/all-ns)))]
-        (doseq [[sym doc] sym-docs
-                :when (and doc
-                           (name sym)
-                           (or (re-find re doc)
-                               (re-find re (name sym))))]
-          (doc* sym))))))
-
-(defn- source*
-  [sym]
-  (println (or (priv/fetch-source (priv/get-var (priv/get-aenv) sym))
-               "Source not found")))
-
 (defn- pst*
   ([]
    (pst* '*e))
@@ -188,13 +109,13 @@
                  argument (second expression-form)]
              (case special-form
                in-ns (priv/process-in-ns argument)
-               dir (dir* argument)
+               dir (priv/dir* argument)
                apropos (let [value (priv/apropos* argument)]
                          (prn value)
                          (priv/process-1-2-3 expression-form value))
-               doc (doc* argument)
-               find-doc (find-doc* argument)
-               source (source* argument)
+               doc (priv/doc* argument)
+               find-doc (priv/find-doc* argument)
+               source (priv/source* argument)
                pst (if argument
                      (pst* argument)
                      (pst*)))
