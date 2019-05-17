@@ -3,14 +3,14 @@
   (:require-macros [cljs.env.macros :refer [ensure with-compiler-env]]
                    [cljs.analyzer.macros :refer [no-warn]]
                    [replete.repl :refer [with-err-str]])
-  (:require [replete.priv-repl :as priv]
-            [clojure.string :as string]
+  (:require [clojure.string :as string]
             [cljs.repl :as repl]
             [cljs.js :as cljs]
             [cljs.analyzer :as ana]
             [cljs.env :as env]
             [cljs.tools.reader :as r]
             [cljs.tagged-literals :as tags]
+            [replete.priv-repl :as pr]
             [replete.repl-resources :refer [special-doc-map repl-special-doc-map]]))
 
 (defn- skip-load?
@@ -75,12 +75,12 @@
     (cb {:lang :js :source ""})
 
     (re-matches #"^goog/.*" path)
-    (priv/do-load-goog name cb)
+    (pr/do-load-goog name cb)
 
     :else
     (loop [{:keys [name macros path extensions]} (hack-macros full)]
       (if extensions
-        (when-not (priv/load-and-callback! name path (first extensions) macros cb)
+        (when-not (pr/load-and-callback! name path (first extensions) macros cb)
           (recur (next extensions)))
         (cb nil)))))
 
@@ -88,9 +88,9 @@
   [argument]
   (let [result-data (atom {})]
     (cljs/eval
-      priv/st
+      pr/st
       argument
-      (priv/make-base-eval-opts)
+      (pr/make-base-eval-opts)
       (fn [result]
         (if (:error result)
           (reset! result-data {:tag :err
@@ -99,23 +99,23 @@
             (if-not (symbol? ns-name)
               (reset! result-data {:tag :err
                                    :val "Argument to in-ns must be a symbol."})
-              (if (some (partial = ns-name) (priv/known-namespaces))
-                (do (reset! priv/current-ns ns-name)
+              (if (some (partial = ns-name) (pr/known-namespaces))
+                (do (reset! pr/current-ns ns-name)
                     (reset! result-data {:tag :ret
                                          :val ns-name}))
                 (let [ns-form `(~'ns ~ns-name)]
                   (cljs/eval
-                    priv/st
+                    pr/st
                     ns-form
-                    (priv/make-base-eval-opts)
+                    (pr/make-base-eval-opts)
                     (fn [{e :error}]
                       (if e
                         (reset! result-data {:tag :err
                                              :val e})
-                        (do (reset! priv/current-ns ns-name)
+                        (do (reset! pr/current-ns ns-name)
                             (reset! result-data {:tag :ret
                                                  :val ns-name}))))))))))))
-    (merge @result-data {:ns @priv/current-ns})))
+    (merge @result-data {:ns @pr/current-ns})))
 
 (defn- string-find-doc*
   [re-string-or-pattern]
@@ -123,14 +123,14 @@
         sym-docs (sort-by first
                           (mapcat (fn [ns]
                                     (map (juxt first (comp :doc second))
-                                         (get-in @priv/st [::ana/namespaces ns :defs])))
-                                  (priv/all-ns)))]
+                                         (get-in @pr/st [::ana/namespaces ns :defs])))
+                                  (pr/all-ns)))]
     (string/join (for [[sym doc] sym-docs
                        :when (and doc
                                   (name sym)
                                   (or (re-find re doc)
                                       (re-find re (name sym))))]
-                   (priv/doc* sym priv/string-doc)))))
+                   (pr/doc* sym pr/string-doc)))))
 
 (defn- string-error
   ([error]
@@ -148,9 +148,9 @@
   ([]
    (string-pst* '*e))
   ([expr]
-   (try (cljs/eval priv/st
+   (try (cljs/eval pr/st
                    expr
-                   (priv/make-base-eval-opts)
+                   (pr/make-base-eval-opts)
                    (fn [{:keys [value]}]
                      (when value
                        {:tag :err
@@ -163,59 +163,59 @@
   ([source]
    (read-eval source true))
   ([source expression?]
-   (let [result {:tag :ret :form source :ns @priv/current-ns}]
+   (let [result {:tag :ret :form source :ns @pr/current-ns}]
      (binding [ana/*cljs-warning-handlers* (if expression?
-                                             [priv/warning-handler]
+                                             [pr/warning-handler]
                                              [ana/default-warning-handler])
-               ana/*cljs-ns* @priv/current-ns
-               env/*compiler* priv/st
-               *ns* (create-ns @priv/current-ns)
+               ana/*cljs-ns* @pr/current-ns
+               env/*compiler* pr/st
+               *ns* (create-ns @pr/current-ns)
                r/*data-readers* tags/*cljs-data-readers*
                r/resolve-symbol ana/resolve-symbol
-               r/*alias-map* (priv/current-alias-map)]
+               r/*alias-map* (pr/current-alias-map)]
        (try
-         (let [expression-form (and expression? (priv/repl-read-string source))]
-           (if (priv/repl-special? expression-form)
+         (let [expression-form (and expression? (pr/repl-read-string source))]
+           (if (pr/repl-special? expression-form)
              (let [special-form (first expression-form)
                    argument (second expression-form)]
                (case special-form
                  in-ns (merge result (process-in-ns argument))
-                 dir (merge result {:val (priv/string-dir argument)})
-                 apropos (let [value (priv/apropos* argument)]
-                           (priv/process-1-2-3 expression-form value)
+                 dir (merge result {:val (pr/string-dir argument)})
+                 apropos (let [value (pr/apropos* argument)]
+                           (pr/process-1-2-3 expression-form value)
                            (merge result {:val value}))
-                 doc (merge result {:val (priv/doc* argument priv/string-doc)})
-                 find-doc (merge result {:val (priv/string-find-doc argument)})
-                 source (merge result {:val (priv/string-source argument)})
+                 doc (merge result {:val (pr/doc* argument pr/string-doc)})
+                 find-doc (merge result {:val (pr/string-find-doc argument)})
+                 source (merge result {:val (pr/string-source argument)})
                  pst (merge result (if argument
                                      (string-pst* argument)
                                      (string-pst*)))))
              (let [eval-result (atom result)]
                (cljs/eval-str
-                 priv/st
+                 pr/st
                  source
                  (if expression? source "File")             ;; Later
                  (merge
-                   {:ns         @priv/current-ns
-                    :load       priv/load
+                   {:ns         @pr/current-ns
+                    :load       pr/load
                     :eval       cljs/js-eval
                     :source-map false
-                    :verbose    (:verbose @priv/app-env)}
-                   (when (:checked-arrays @priv/app-env)
-                     {:checked-arrays (:checked-arrays @priv/app-env)})
+                    :verbose    (:verbose @pr/app-env)}
+                   (when (:checked-arrays @pr/app-env)
+                     {:checked-arrays (:checked-arrays @pr/app-env)})
                    (when expression?
                      {:context       :expr
                       :def-emits-var true}))
                  (fn [{:keys [ns value error]}]
                    (if expression?
                      (when-not error
-                       (priv/process-1-2-3 expression-form value)
-                       (when (priv/def-form? expression-form)
+                       (pr/process-1-2-3 expression-form value)
+                       (when (pr/def-form? expression-form)
                          (let [{:keys [ns name]} (meta value)]
-                           (swap! priv/st assoc-in [::ana/namespaces ns
+                           (swap! pr/st assoc-in [::ana/namespaces ns
                                                   :defs name
                                                   ::repl-entered-source] source)))
-                       (reset! priv/current-ns ns)
+                       (reset! pr/current-ns ns)
                        (reset! eval-result (merge result {:val value}))))
                    (when error
                      (set! *e error)
