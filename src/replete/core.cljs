@@ -8,7 +8,7 @@
     [cljs.tools.reader :as r]
     [cljs.tools.reader.reader-types :as rt]
     [clojure.string :as string]
-    [replete.repl :as repl])
+    [replete.priv-repl :as pr])
   (:import
     (goog Uri)                                               ; Explicitly import here for replete.io
     (goog.string StringBuffer)))
@@ -347,7 +347,7 @@
   "Returns the var to which a symbol will be resolved in the namespace, else
   nil."
   [ns sym]
-  (#'repl/ns-resolve ns sym))
+  (#'pr/ns-resolve ns sym))
 
 (s/fdef ns-resolve
         :args (s/cat :ns symbol? :sym symbol?)
@@ -357,7 +357,7 @@
   "Returns the var to which a symbol will be resolved in the current
   namespace, else nil."
   [sym]
-  (#'repl/resolve sym))
+  (#'pr/resolve sym))
 
 (s/fdef resolve
         :args (s/cat :sym symbol?)
@@ -394,9 +394,9 @@
   The namespace must exist. The var will adopt any metadata from the name
   symbol. Returns the var."
   ([ns name]
-   (#'repl/intern ns name))
+   (#'pr/intern ns name))
   ([ns name val]
-   (#'repl/intern ns name val)))
+   (#'pr/intern ns name val)))
 
 (s/fdef intern
         :args (s/cat :ns (s/or :sym symbol? :ns #(instance? Namespace %))
@@ -407,7 +407,7 @@
   [state ns]
   (-> state
       (assoc-in [:cljs.analyzer/namespaces ns]
-                (get-in @@#'repl/st [:cljs.analyzer/namespaces ns]))))
+                (get-in @@#'pr/st [:cljs.analyzer/namespaces ns]))))
 
 (defn init-empty-state
   "An init function for use with cljs.js/empty-state which initializes the
@@ -461,5 +461,5 @@
 
 ;; Ensure replete.io and replete.http are loaded so that their
 ;; facilities are available
-(#'repl/side-load-ns 'replete.http)
-(#'repl/side-load-ns 'replete.io)
+(#'pr/side-load-ns 'replete.http)
+(#'pr/side-load-ns 'replete.io)
