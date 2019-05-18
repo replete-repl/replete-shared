@@ -177,7 +177,8 @@
          (let [expression-form (and expression? (pr/repl-read-string source))]
            (if (pr/repl-special? expression-form)
              (let [special-form (first expression-form)
-                   argument (second expression-form)]
+                   argument (second expression-form)
+                   result (merge result {:tag :out})]
                (case special-form
                  in-ns (merge result (process-in-ns argument))
                  dir (merge result {:val (pr/string-dir argument)})
