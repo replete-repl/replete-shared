@@ -223,9 +223,9 @@
                      (reset! eval-result (merge result
                                                 {:tag :err
                                                  :clojure.error/phase :execution
-                                                 :val error})))))
+                                                 :val (string-error error)})))))
                @eval-result)))
          (catch :default e
            (merge result {:tag :err
                           :clojure.error/phase :read-source
-                          :val e})))))))
+                          :val (string-error e)})))))))
