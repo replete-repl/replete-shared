@@ -220,7 +220,8 @@
                        (reset! pr/current-ns ns)
                        (let [out-str (with-out-str (pprint/pprint value {:width (or (:width @pr/app-env)
                                                                                     35)
-                                                                         :ns    ns}))
+                                                                         :ns    ns
+                                                                         :theme "plain"}))
                              out-str (subs out-str 0 (dec (count out-str)))]
                          (reset! eval-result (merge result {:val out-str})))))
                    (when error
