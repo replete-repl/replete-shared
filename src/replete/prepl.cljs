@@ -11,7 +11,8 @@
             [cljs.tools.reader :as r]
             [cljs.tagged-literals :as tags]
             [replete.priv-repl :as pr]
-            [replete.repl-resources :refer [special-doc-map repl-special-doc-map]]))
+            [replete.repl-resources :refer [special-doc-map repl-special-doc-map]]
+            [replete.pprint :as pprint]))
 
 (defn- skip-load?
   [{:keys [name macros]}]
@@ -217,7 +218,11 @@
                                                   :defs name
                                                   ::repl-entered-source] source)))
                        (reset! pr/current-ns ns)
-                       (reset! eval-result (merge result {:val value}))))
+                       (let [out-str (with-out-str (pprint/pprint value {:width (or (:width @pr/app-env)
+                                                                                    35)
+                                                                         :ns    ns}))
+                             out-str (subs out-str 0 (dec (count out-str)))]
+                         (reset! eval-result (merge result {:val out-str})))))
                    (when error
                      (set! *e error)
                      (reset! eval-result (merge result
