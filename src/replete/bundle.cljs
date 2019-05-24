@@ -4,6 +4,9 @@
     chivorcam.core
     clojure.core.reducers
     clojure.data
+    clojure.datafy
+    clojure.edn
+    clojure.reflect
     clojure.test.check
     clojure.test.check.clojure-test
     clojure.test.check.generators
