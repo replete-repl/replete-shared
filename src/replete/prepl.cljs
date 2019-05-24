@@ -199,7 +199,7 @@
                  (if expression? source "File")             ;; Later
                  (merge
                    {:ns         @pr/current-ns
-                    :load       pr/load
+                    :load       load
                     :eval       cljs/js-eval
                     :source-map false
                     :verbose    (:verbose @pr/app-env)}
