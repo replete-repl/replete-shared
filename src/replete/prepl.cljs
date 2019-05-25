@@ -1,8 +1,7 @@
 (ns replete.prepl
   (:refer-clojure :exclude [resolve eval])
   (:require-macros [cljs.env.macros :refer [ensure with-compiler-env]]
-                   [cljs.analyzer.macros :refer [no-warn]]
-                   [replete.repl :refer [with-err-str]])
+                   [cljs.analyzer.macros :refer [no-warn]])
   (:require [clojure.string :as string]
             [cljs.repl :as repl]
             [cljs.js :as cljs]
@@ -156,9 +155,9 @@
                      (when value
                        {:tag :err
                         :val (string-error value true)})))
-        (catch js/Error e {:tag :err
+        (catch js/Error e {:tag                 :err
                            :clojure.error/phase :execution
-                           :val (str :caught e)}))))
+                           :val                 (str :caught e)}))))
 
 (defn ^:export read-eval
   ([source]
@@ -192,46 +191,53 @@
                  pst (merge result (if argument
                                      (string-pst* argument)
                                      (string-pst*)))))
-             (let [eval-result (atom result)]
-               (cljs/eval-str
-                 pr/st
-                 source
-                 (if expression? source "File")             ;; Later
-                 (merge
-                   {:ns         @pr/current-ns
-                    :load       load
-                    :eval       cljs/js-eval
-                    :source-map false
-                    :verbose    (:verbose @pr/app-env)}
-                   (when (:checked-arrays @pr/app-env)
-                     {:checked-arrays (:checked-arrays @pr/app-env)})
-                   (when expression?
-                     {:context       :expr
-                      :def-emits-var true}))
-                 (fn [{:keys [ns value error]}]
-                   (if expression?
-                     (when-not error
-                       (pr/process-1-2-3 expression-form value)
-                       (when (pr/def-form? expression-form)
-                         (let [{:keys [ns name]} (meta value)]
-                           (swap! pr/st assoc-in [::ana/namespaces ns
-                                                  :defs name
-                                                  ::repl-entered-source] source)))
-                       (reset! pr/current-ns ns)
-                       (let [out-str (with-out-str (pprint/pprint value {:width (or (:width @pr/app-env)
-                                                                                    35)
-                                                                         :ns    ns
-                                                                         :theme "plain"}))
-                             out-str (subs out-str 0 (dec (count out-str)))]
-                         (reset! eval-result (merge result {:val out-str})))))
-                   (when error
-                     (set! *e error)
-                     (reset! eval-result (merge result
-                                                {:tag :err
-                                                 :clojure.error/phase :execution
-                                                 :val (string-error error)})))))
+             (let [eval-result (atom [])
+                   prepl-print-fn (fn [x]
+                                    (swap! eval-result conj
+                                           (assoc result :tag :out
+                                                         :val x)))]
+               (binding [*print-newline* true
+                         *print-fn* prepl-print-fn
+                         *print-err-fn* prepl-print-fn]
+                 (cljs/eval-str
+                   pr/st
+                   source
+                   (if expression? source "File")           ;; TODO
+                   (merge
+                     {:ns         @pr/current-ns
+                      :load       load
+                      :eval       cljs/js-eval
+                      :source-map false
+                      :verbose    (:verbose @pr/app-env)}
+                     (when (:checked-arrays @pr/app-env)
+                       {:checked-arrays (:checked-arrays @pr/app-env)})
+                     (when expression?
+                       {:context       :expr
+                        :def-emits-var true}))
+                   (fn [{:keys [ns value error]}]
+                     (if expression?
+                       (when-not error
+                         (pr/process-1-2-3 expression-form value)
+                         (when (pr/def-form? expression-form)
+                           (let [{:keys [ns name]} (meta value)]
+                             (swap! pr/st assoc-in [::ana/namespaces ns
+                                                    :defs name
+                                                    ::repl-entered-source] source)))
+                         (reset! pr/current-ns ns)
+                         (let [out-str (with-out-str (pprint/pprint value {:width (or (:width @pr/app-env)
+                                                                                      35)
+                                                                           :ns    ns
+                                                                           :theme "plain"}))
+                               out-str (subs out-str 0 (dec (count out-str)))]
+                           (swap! eval-result conj (assoc result :val out-str)))))
+                     (when error
+                       (set! *e error)
+                       (swap! eval-result conj (merge result
+                                                      {:tag                 :err
+                                                       :clojure.error/phase :execution
+                                                       :val                 (string-error error)}))))))
                @eval-result)))
          (catch :default e
-           (merge result {:tag :err
-                          :clojure.error/phase :read-source
-                          :val (string-error e)})))))))
+           (vec (merge result {:tag                 :err
+                               :clojure.error/phase :read-source
+                               :val                 (string-error e)}))))))))
