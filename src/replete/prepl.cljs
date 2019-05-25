@@ -196,8 +196,7 @@
                                     (swap! eval-result conj
                                            (assoc result :tag :out
                                                          :val x)))]
-               (binding [*print-length* 30
-                         *print-newline* true
+               (binding [*print-newline* true
                          *print-fn* prepl-print-fn
                          *print-err-fn* prepl-print-fn]
                  (cljs/eval-str
