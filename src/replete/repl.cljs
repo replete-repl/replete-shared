@@ -16,6 +16,24 @@
             [replete.priv-repl :as pr]
             [replete.repl-resources :refer [special-doc-map repl-special-doc-map]]))
 
+(defn- run-sync!
+  "Like cljs.js/run-async!, but with the expectation that cb will be called
+  synchronously within proc. When callbacks are done synchronously, run-async!
+  ends up growing the stack as coll is processed, while this implementation
+  employs recur."
+  [proc coll break? cb]
+  (loop [coll coll]
+    (if (seq coll)
+      (let [cb-val (atom nil)]
+        (proc (first coll) #(reset! cb-val %))
+        (if (break? @cb-val)
+          (cb @cb-val)
+          (recur (rest coll))))
+      (cb nil))))
+
+; Monkey-patch cljs.js/run-async! to instead be our more stack-efficient run-sync!
+(set! cljs/run-async! run-sync!)
+
 (defn ^:export setup-cljs-user []
   (js/eval "goog.provide('cljs.user')")
   (js/eval "goog.require('cljs.core')"))
