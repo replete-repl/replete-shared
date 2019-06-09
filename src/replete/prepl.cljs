@@ -238,6 +238,6 @@
                                                        :val                 (string-error error)}))))))
                @eval-result)))
          (catch :default e
-           (vec (merge result {:tag                 :err
-                               :clojure.error/phase :read-source
-                               :val                 (string-error e)}))))))))
+           [(merge result {:tag                 :err
+                           :clojure.error/phase :read-source
+                           :val                 (string-error e)})]))))))
