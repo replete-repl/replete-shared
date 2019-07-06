@@ -13,6 +13,11 @@
             [replete.repl-resources :refer [special-doc-map repl-special-doc-map]]
             [replete.pprint :as pprint]))
 
+;; Establish cljs.user namespace
+(js/eval "goog.provide('cljs.user')")
+(js/eval "goog.require('cljs.core')")
+
+
 (defn- skip-load?
   [{:keys [name macros]}]
   (or (= name 'cljsjs.parinfer)
