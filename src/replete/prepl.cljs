@@ -13,10 +13,9 @@
             [replete.repl-resources :refer [special-doc-map repl-special-doc-map]]
             [replete.pprint :as pprint]))
 
-;; Establish cljs.user namespace
-(js/eval "goog.provide('cljs.user')")
-(js/eval "goog.require('cljs.core')")
-
+;; Remove unwanted errors providing 'cljs.user
+(defonce patch-goog-provide
+         (js/eval "goog.isProvided_ = function(x) { return false; };"))
 
 (defn- skip-load?
   [{:keys [name macros]}]
@@ -213,7 +212,7 @@
                       :load       load
                       :eval       cljs/js-eval
                       :source-map false
-                      :verbose    (:verbose @pr/app-env)}
+                      :verbose    false}                    ; TODO ... provide a side debug 'tap'?
                      (when (:checked-arrays @pr/app-env)
                        {:checked-arrays (:checked-arrays @pr/app-env)})
                      (when expression?
