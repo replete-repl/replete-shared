@@ -226,7 +226,7 @@
                            (let [{:keys [ns name]} (meta value)]
                              (swap! pr/st assoc-in [::ana/namespaces ns
                                                     :defs name
-                                                    ::repl-entered-source] source)))
+                                                    ::pr/repl-entered-source] source)))
                          (reset! pr/current-ns ns)
                          (let [out-str (with-out-str (pprint/pprint value {:width (or (:width @pr/app-env)
                                                                                       35)

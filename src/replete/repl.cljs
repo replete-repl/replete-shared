@@ -140,7 +140,7 @@
                      (pr/process-1-2-3 expression-form value)
                      (when (pr/def-form? expression-form)
                        (let [{:keys [ns name]} (meta value)]
-                         (swap! pr/st assoc-in [::ana/namespaces ns :defs name ::repl-entered-source] source)))
+                         (swap! pr/st assoc-in [::ana/namespaces ns :defs name ::pr/repl-entered-source] source)))
                      (reset! pr/current-ns ns)
                      nil)
                    (do
