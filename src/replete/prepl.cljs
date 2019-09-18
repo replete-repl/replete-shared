@@ -183,18 +183,18 @@
              (let [special-form (first expression-form)
                    argument (second expression-form)
                    result (merge result {:tag :out})]
-               (case special-form
-                 in-ns (merge result (process-in-ns argument))
-                 dir (merge result {:val (pr/string-dir argument)})
-                 apropos (let [value (pr/apropos* argument)]
-                           (pr/process-1-2-3 expression-form value)
-                           (merge result {:val value}))
-                 doc (merge result {:val (pr/doc* argument pr/string-doc)})
-                 find-doc (merge result {:val (pr/string-find-doc argument)})
-                 source (merge result {:val (pr/string-source argument)})
-                 pst (merge result (if argument
-                                     (string-pst* argument)
-                                     (string-pst*)))))
+               [(case special-form
+                  in-ns (merge result (process-in-ns argument))
+                  dir (merge result {:val (pr/string-dir argument)})
+                  apropos (let [value (pr/apropos* argument)]
+                            (pr/process-1-2-3 expression-form value)
+                            (merge result {:val value}))
+                  doc (merge result {:val (pr/doc* argument pr/string-doc)})
+                  find-doc (merge result {:val (pr/string-find-doc argument)})
+                  source (merge result {:val (pr/string-source argument)})
+                  pst (merge result (if argument
+                                      (string-pst* argument)
+                                      (string-pst*))))])
              (let [eval-result (atom [])
                    prepl-print-fn (fn [x]
                                     (swap! eval-result conj
