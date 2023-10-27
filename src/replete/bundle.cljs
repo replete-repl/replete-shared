@@ -13,6 +13,7 @@
     clojure.test.check.properties
     clojure.zip
     cljs.analyzer.api
+    cljs.math
     cljs.pprint
     cljs.spec.alpha
     cljs.spec.test.alpha
